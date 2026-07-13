@@ -121,7 +121,4 @@ specs/
     sdtmct_2024-09-27.json
 ```
 
----
-
-Which would you like me to paste next?
 ```
