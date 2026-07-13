@@ -1,6 +1,6 @@
 ### Executive Summary
 
-This repository contains a complete **OSB specs bundle** that bridges a metadata‑driven study definition to your `raw_2_tlf_v1` SDTM/ADaM/TLF pipeline. It includes ready‑made **domain YAMLs** for DM, AE, LB, EX, VS, CM, and CMH, runtime metadata, two exporter scripts, a Databricks‑aware validation routine, and packaging scripts for Linux and Windows. The bundle is designed to be a single source of truth for domain build specifications, to validate source view availability and codelist references, and to produce the exact `specs/domains/*.yaml` files your notebook expects.
+This repository contains a complete **OSB specs bundle** that bridges a metadata‑driven study definition for `raw_2_tlf_v1` SDTM/ADaM/TLF pipeline. It includes ready‑made **domain YAMLs** for DM, AE, LB, EX, VS, CM, and CMH, runtime metadata, two exporter scripts, a Databricks‑aware validation routine, and packaging scripts for Linux and Windows. The bundle is designed to be a single source of truth for domain build specifications, to validate source view availability and codelist references, and to produce the exact `specs/domains/*.yaml` files the pipeline notebook expects.
 
 ---
 
@@ -89,7 +89,7 @@ python export_osb_to_yaml_with_validation.py
   - `SHOW TABLES LIKE '<view_name>'`
 - The exporter calls the Databricks SQL Statements API endpoint `/api/2.0/sql/statements/execute` and polls the statement result.
 
-#### Example curl test you run locally
+#### Example curl test to run locally
 ```bash
 DATABRICKS_HOST="https://adb-123456789012345.7.azuredatabricks.net"
 TOKEN="<your-token>"
@@ -153,9 +153,9 @@ curl -s -X POST "${DATABRICKS_HOST}/api/2.0/sql/statements/execute" \
 
 #### Recommended next steps
 - Add additional domains as needed by extending the OSB JSON `domains` array and re-running the exporter.  
-- Integrate the exporter into your CI pipeline to validate domain specs on each commit.  
+- Integrate the exporter into CI pipeline to validate domain specs on each commit.  
 - Extend the exporter to embed additional metadata such as `define_xml` mappings or ADaM skeleton hints.  
-- If you want the enhanced exporter to run inside Databricks, adapt the Databricks check to use your workspace SQL endpoint and test with a nonprivileged token.
+- Adapt Databricks check to use workspace SQL endpoint and test with a nonprivileged token.
 
 ---
 
@@ -169,4 +169,4 @@ curl -s -X POST "${DATABRICKS_HOST}/api/2.0/sql/statements/execute" \
 
 ---
 
-If you want, I will paste the **fully populated enhanced exporter Python file** into the bundle so the Windows and Linux installers include the complete validation logic ready to run.
+
