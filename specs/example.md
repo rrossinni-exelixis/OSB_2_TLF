@@ -123,9 +123,5 @@ specs/
 
 ---
 
-If you’d like, I can:
-- produce this as a ready `README.md` file content (exact Markdown) for direct paste into your repo, or  
-- generate a compact checklist file (`CHECKLIST.md`) for operational runs.
-
 Which would you like me to paste next?
 ```
