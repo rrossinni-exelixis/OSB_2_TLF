@@ -65,4 +65,3 @@ This is a **nontechnical workflow** that shows exactly how the OSB artifacts  (O
 
 ---
 
-If you want, I can now produce a **one‑page cheat sheet** that maps each YAML key to the exact notebook action (e.g., `variables[].derivation → SELECT expression`) so nontechnical team members can follow the pipeline without ambiguity.
