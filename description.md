@@ -1,9 +1,9 @@
 ### Executive summary
-This is a **simple, nontechnical workflow** that shows exactly how the OSB artifacts you already have (OSB JSON / domain YAMLs / CT package / exporter scripts) are used to convert raw clinical data into final tables, listings, and figures (TLFs) via your Databricks pipeline. Follow the numbered steps below in order — each step names the artifact you touch and the concrete action to take.
+This is a **nontechnical workflow** that shows exactly how the OSB artifacts  (OSB JSON / domain YAMLs / CT package / exporter scripts) are used to convert raw clinical data into final tables, listings, and figures (TLFs) via Databricks pipeline. Follow the steps below in order — each step names the artifact and the action to take.
 
 ---
 
-### What you already have
+
 - **OSB study JSON** — the canonical study definition (derivations, visits, endpoints).  
 - **Domain YAMLs** (`specs/domains/*.yaml`) — one file per SDTM domain with `source_view` and `derivation` for each variable.  
 - **CDISC CT package** (`specs/ct/...json`) — controlled terminology used for validation.  
@@ -41,7 +41,7 @@ This is a **simple, nontechnical workflow** that shows exactly how the OSB artif
 
 ---
 
-### What the Databricks pipeline actually does (plain language)
+### What the Databricks pipeline actually does:
 - **Reads the YAMLs**: For each domain the notebook reads `source_view` and each variable’s `derivation`.  
 - **Builds SQL**: It substitutes each derivation into `SELECT <derivation> AS <VAR>` and uses `FROM <source_view>`.  
 - **Executes SQL to create SDTM**: The SQL runs in Databricks to produce SDTM domain tables. Postprocessing flags (sequence numbers, day calculations) are applied after the SELECT.  
@@ -50,7 +50,7 @@ This is a **simple, nontechnical workflow** that shows exactly how the OSB artif
 
 ---
 
-### Quick checklist before you run anything
+### Checklist before execution:
 - **OSB JSON exported and versioned**.  
 - **specs/domains/*.yaml present and validated** (no empty derivations).  
 - **specs/ct/** contains your CT JSON.  
