@@ -1228,3 +1228,544 @@ Write-Host "Files written to $DomDir and $CtDir"
 - **Archive**: `osb_specs_bundle.zip` ready to upload or share.
 
 If you want the enhanced exporter fully populated with the Databricks validation function and codelist checks included, I will paste the complete Python file into the bundle on request.
+### OSB specs installer PowerShell
+
+Below is a single **pasteable PowerShell script** that creates the full `specs/` directory tree, writes all domain YAMLs (DM, AE, LB, EX, VS, CM, CMH), the runtime meta file, placeholder CT README, and two exporter scripts. It also produces a compressed archive `osb_specs_bundle.zip`. Save the block into a file named **`Create-OSB-Specs.ps1`** and run it in PowerShell (Windows).
+
+```powershell
+<#
+.SYNOPSIS
+Create OSB specs directory, domain YAMLs, exporter scripts, and a zip archive.
+
+USAGE
+1. Save this file as Create-OSB-Specs.ps1
+2. Open PowerShell, navigate to the script folder
+3. Run:  .\Create-OSB-Specs.ps1
+#>
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$RootDir = (Get-Location).Path
+$OutDir  = Join-Path $RootDir "specs"
+$DomDir  = Join-Path $OutDir "domains"
+$CtDir   = Join-Path $OutDir "ct"
+
+New-Item -ItemType Directory -Path $DomDir -Force | Out-Null
+New-Item -ItemType Directory -Path $CtDir -Force | Out-Null
+
+# Write DM
+@"
+domain: DM
+label: Demographics
+source_view: dm_prepped
+depends_on: []
+build_order_priority: 1
+ct_package: specs/ct/sdtmct_2024-09-27.json
+variables:
+  - name: STUDYID
+    derivation: "'XL092'"
+    type: Char
+    core: Req
+  - name: USUBJID
+    derivation: USUBJID
+    type: Char
+    core: Req
+  - name: SUBJID
+    derivation: SUBJID
+    type: Char
+    core: Req
+  - name: AGE
+    derivation: "CAST(AGE AS INTEGER)"
+    type: Num
+    core: Req
+  - name: AGEU
+    derivation: "'YEARS'"
+    type: Char
+    core: Req
+  - name: SEX
+    derivation: SEX_STD
+    type: Char
+    core: Req
+    codelist: C66731
+  - name: RACE
+    derivation: RACE_STD
+    type: Char
+    core: Exp
+    codelist: C74457
+  - name: ARM
+    derivation: ARM_STD
+    type: Char
+    core: Req
+  - name: ARMCD
+    derivation: ARMCD_STD
+    type: Char
+    core: Req
+  - name: RFSTDTC
+    derivation: RANDDAT
+    type: Char
+    core: Req
+  - name: RFXSTDTC
+    derivation: "(SELECT MIN(ECSTDAT) FROM ec_or1_raw WHERE Subject = dm_prepped.Subject)"
+    type: Char
+    core: Exp
+  - name: DTHDTC
+    derivation: DDDAT
+    type: Char
+    core: Exp
+suppqual_variables: []
+postprocessing: []
+filter: null
+"@ | Out-File -FilePath (Join-Path $DomDir "dm.yaml") -Encoding utf8
+
+# Write AE
+@"
+domain: AE
+label: Adverse Events
+source_view: ae_prepped
+depends_on:
+  - DM
+build_order_priority: 3
+ct_package: specs/ct/sdtmct_2024-09-27.json
+variables:
+  - name: STUDYID
+    derivation: "'XL092'"
+    type: Char
+    core: Req
+  - name: USUBJID
+    derivation: USUBJID
+    type: Char
+    core: Req
+  - name: AESEQ
+    derivation: "[XL_SEQ:AE]"
+    type: Num
+    core: Req
+  - name: AETERM
+    derivation: AETERM
+    type: Char
+    core: Req
+  - name: AEDECOD
+    derivation: "UPPER(TRIM(AETERM_PT))"
+    type: Char
+    core: Req
+    codelist: MedDRA_PT
+  - name: AEBODSYS
+    derivation: AETERM_SOC
+    type: Char
+    core: Req
+    codelist: MedDRA_SOC
+  - name: AESER
+    derivation: "CASE WHEN AESERIOU = 'YES' THEN 'Y' ELSE 'N' END"
+    type: Char
+    core: Req
+    codelist: C66742
+  - name: AESTDTC
+    derivation: "DATE_FORMAT(TO_DATE(AEDAT,'ddMMMyyyy'),'yyyy-MM-dd')"
+    type: Char
+    core: Req
+  - name: AEENDTC
+    derivation: "CASE WHEN AEONGO_STD = 'Y' THEN NULL ELSE DATE_FORMAT(TO_DATE(AEENDAT_INT,'yyyy-MM-dd'),'yyyy-MM-dd') END"
+    type: Char
+    core: Exp
+  - name: AETOXGR
+    derivation: "CAST(AE_CTCGRADE AS STRING)"
+    type: Char
+    core: Exp
+  - name: AEOUT
+    derivation: AEOUT_STD
+    type: Char
+    core: Exp
+    codelist: C66768
+suppqual_variables:
+  - name: AECONTRT
+    label: Concomitant Treatment Given
+    derivation: AECONTRT_STD
+postprocessing:
+  - "[XL_SEQ:AE]"
+  - "[XL_DY:AESTDTC-RFSTDTC]"
+filter: null
+"@ | Out-File -FilePath (Join-Path $DomDir "ae.yaml") -Encoding utf8
+
+# Write LB
+@"
+domain: LB
+label: Laboratory Test Results
+source_view: lb_prepped
+depends_on:
+  - DM
+build_order_priority: 2
+ct_package: specs/ct/sdtmct_2024-09-27.json
+variables:
+  - name: STUDYID
+    derivation: "'XL092'"
+    type: Char
+    core: Req
+  - name: USUBJID
+    derivation: USUBJID
+    type: Char
+    core: Req
+  - name: LBSEQ
+    derivation: "[XL_SEQ:LB]"
+    type: Num
+    core: Req
+  - name: LBDTC
+    derivation: "DATE_FORMAT(TO_DATE(LBDAT,'ddMMMyyyy'),'yyyy-MM-dd')"
+    type: Char
+    core: Req
+  - name: LBTESTCD
+    derivation: LBTESTCD
+    type: Char
+    core: Req
+  - name: LBTEST
+    derivation: LBTEST
+    type: Char
+    core: Req
+  - name: LBORRES
+    derivation: LBORRES
+    type: Char
+    core: Req
+  - name: LBORRESU
+    derivation: LBORRESU
+    type: Char
+    core: Req
+  - name: LLSTRESN
+    derivation: LLSTRESN
+    type: Num
+    core: Exp
+  - name: LBNRIND
+    derivation: LBNRIND
+    type: Char
+    core: Exp
+    codelist: C78736
+suppqual_variables: []
+postprocessing: []
+filter: null
+"@ | Out-File -FilePath (Join-Path $DomDir "lb.yaml") -Encoding utf8
+
+# Write EX
+@"
+domain: EX
+label: Exposure
+source_view: ex_prepped
+depends_on:
+  - DM
+build_order_priority: 4
+ct_package: specs/ct/sdtmct_2024-09-27.json
+variables:
+  - name: STUDYID
+    derivation: "'XL092'"
+    type: Char
+    core: Req
+  - name: USUBJID
+    derivation: USUBJID
+    type: Char
+    core: Req
+  - name: EXSEQ
+    derivation: "[XL_SEQ:EX]"
+    type: Num
+    core: Req
+  - name: EXTRT
+    derivation: EXTRT
+    type: Char
+    core: Req
+  - name: EXDOSE
+    derivation: "CAST(EXDOSE AS NUMERIC)"
+    type: Num
+    core: Req
+  - name: EXDOSU
+    derivation: EXDOSU
+    type: Char
+    core: Req
+  - name: EXDOSFRM
+    derivation: EXDOSFRM_STD
+    type: Char
+    core: Exp
+  - name: EXSTDTC
+    derivation: "DATE_FORMAT(TO_DATE(EXSTDT,'ddMMMyyyy'),'yyyy-MM-dd')"
+    type: Char
+    core: Req
+  - name: EXENDTC
+    derivation: "CASE WHEN EXONGO_STD = 'Y' THEN NULL ELSE DATE_FORMAT(TO_DATE(EXENDT,'ddMMMyyyy'),'yyyy-MM-dd') END"
+    type: Char
+    core: Exp
+suppqual_variables: []
+postprocessing:
+  - "[XL_SEQ:EX]"
+filter: null
+"@ | Out-File -FilePath (Join-Path $DomDir "ex.yaml") -Encoding utf8
+
+# Write VS
+@"
+domain: VS
+label: Vital Signs
+source_view: vs_prepped
+depends_on:
+  - DM
+build_order_priority: 5
+ct_package: specs/ct/sdtmct_2024-09-27.json
+variables:
+  - name: STUDYID
+    derivation: "'XL092'"
+    type: Char
+    core: Req
+  - name: USUBJID
+    derivation: USUBJID
+    type: Char
+    core: Req
+  - name: VSSEQ
+    derivation: "[XL_SEQ:VS]"
+    type: Num
+    core: Req
+  - name: VSTESTCD
+    derivation: VSTESTCD
+    type: Char
+    core: Req
+  - name: VSTEST
+    derivation: VSTEST
+    type: Char
+    core: Req
+  - name: VSORRES
+    derivation: VSORRES
+    type: Char
+    core: Req
+  - name: VSORRESU
+    derivation: VSORRESU
+    type: Char
+    core: Req
+  - name: VSDTC
+    derivation: "DATE_FORMAT(TO_DATE(VSDAT,'ddMMMyyyy'),'yyyy-MM-dd')"
+    type: Char
+    core: Req
+  - name: VSNRIND
+    derivation: VSNRIND
+    type: Char
+    core: Exp
+    codelist: C78736
+suppqual_variables: []
+postprocessing:
+  - "[XL_SEQ:VS]"
+filter: null
+"@ | Out-File -FilePath (Join-Path $DomDir "vs.yaml") -Encoding utf8
+
+# Write CM
+@"
+domain: CM
+label: Concomitant Medications
+source_view: cm_prepped
+depends_on:
+  - DM
+build_order_priority: 6
+ct_package: specs/ct/sdtmct_2024-09-27.json
+variables:
+  - name: STUDYID
+    derivation: "'XL092'"
+    type: Char
+    core: Req
+  - name: USUBJID
+    derivation: USUBJID
+    type: Char
+    core: Req
+  - name: CMSEQ
+    derivation: "[XL_SEQ:CM]"
+    type: Num
+    core: Req
+  - name: CMTRT
+    derivation: CMTRT
+    type: Char
+    core: Req
+  - name: CMDOSE
+    derivation: CMDOSE
+    type: Char
+    core: Exp
+  - name: CMDOSU
+    derivation: CMDOSU
+    type: Char
+    core: Exp
+  - name: CMSTDTC
+    derivation: "DATE_FORMAT(TO_DATE(CMSTDT,'ddMMMyyyy'),'yyyy-MM-dd')"
+    type: Char
+    core: Req
+  - name: CMENDTC
+    derivation: "CASE WHEN CMONGO_STD = 'Y' THEN NULL ELSE DATE_FORMAT(TO_DATE(CMENDT,'ddMMMyyyy'),'yyyy-MM-dd') END"
+    type: Char
+    core: Exp
+suppqual_variables: []
+postprocessing:
+  - "[XL_SEQ:CM]"
+filter: null
+"@ | Out-File -FilePath (Join-Path $DomDir "cm.yaml") -Encoding utf8
+
+# Write CMH
+@"
+domain: CMH
+label: Concomitant Medication History
+source_view: cmh_prepped
+depends_on:
+  - DM
+build_order_priority: 7
+ct_package: specs/ct/sdtmct_2024-09-27.json
+variables:
+  - name: STUDYID
+    derivation: "'XL092'"
+    type: Char
+    core: Req
+  - name: USUBJID
+    derivation: USUBJID
+    type: Char
+    core: Req
+  - name: CMHSEQ
+    derivation: "[XL_SEQ:CMH]"
+    type: Num
+    core: Req
+  - name: CMHTERM
+    derivation: CMHTERM
+    type: Char
+    core: Req
+  - name: CMHSTDTC
+    derivation: "DATE_FORMAT(TO_DATE(CMHSTDT,'ddMMMyyyy'),'yyyy-MM-dd')"
+    type: Char
+    core: Req
+  - name: CMHENDTC
+    derivation: "CASE WHEN CMHONGO_STD = 'Y' THEN NULL ELSE DATE_FORMAT(TO_DATE(CMHENDT,'ddMMMyyyy'),'yyyy-MM-dd') END"
+    type: Char
+    core: Exp
+suppqual_variables: []
+postprocessing:
+  - "[XL_SEQ:CMH]"
+filter: null
+"@ | Out-File -FilePath (Join-Path $DomDir "cmh.yaml") -Encoding utf8
+
+# Runtime meta
+@"
+study_id: XL092-123
+project_root: /Workspace/Users/rossinni.r@gmail.com/Drafts/SDTM_Build_POC
+new_run: true
+reuse_timestamp: null
+subjects_per_treatment_arm: 100
+"@ | Out-File -FilePath (Join-Path $OutDir "osb_runtime_meta.yaml") -Encoding utf8
+
+# CT README placeholder
+@"
+Place your CDISC CT package JSON here with filename:
+  sdtmct_2024-09-27.json
+
+This file is referenced by ct_package keys in the domain YAMLs.
+"@ | Out-File -FilePath (Join-Path $CtDir "README.txt") -Encoding utf8
+
+# Simple exporter script
+@"
+#!/usr/bin/env python3
+import json
+from pathlib import Path
+import yaml
+OSB_JSON = 'osb_study.json'
+OUT_DIR = Path('specs/domains')
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+def normalize_domain_spec(domain_obj):
+    spec = {
+        'domain': domain_obj.get('domain'),
+        'label': domain_obj.get('label'),
+        'source_view': domain_obj.get('source_view'),
+        'depends_on': domain_obj.get('depends_on', []),
+        'build_order_priority': domain_obj.get('build_order_priority', 99),
+        'variables': domain_obj.get('variables', []),
+        'suppqual_variables': domain_obj.get('suppqual_variables', []),
+        'postprocessing': domain_obj.get('postprocessing', []),
+        'filter': domain_obj.get('filter', None)
+    }
+    return spec
+def write_yaml(domain_spec):
+    domain = domain_spec['domain'].lower()
+    filename = OUT_DIR / f\"{domain}.yaml\"
+    with open(filename, 'w', encoding='utf-8') as f:
+        yaml.safe_dump(domain_spec, f, sort_keys=False, default_flow_style=False)
+    print(f'Wrote {filename}')
+def main():
+    if not Path(OSB_JSON).exists():
+        print(f'ERROR: {OSB_JSON} not found.')
+        return
+    with open(OSB_JSON, 'r', encoding='utf-8') as fh:
+        osb = json.load(fh)
+    domains = osb.get('domains', [])
+    if not domains:
+        print('No domains found in OSB JSON. Nothing to export.')
+        return
+    for d in domains:
+        spec = normalize_domain_spec(d)
+        write_yaml(spec)
+    runtime = osb.get('runtime', {})
+    meta = {
+        'study_id': osb.get('study', {}).get('study_id'),
+        'project_root': osb.get('study', {}).get('project_root'),
+        'new_run': runtime.get('new_run', True),
+        'reuse_timestamp': runtime.get('reuse_timestamp'),
+        'subjects_per_treatment_arm': runtime.get('subjects_per_treatment_arm')
+    }
+    meta_file = OUT_DIR.parent / 'osb_runtime_meta.yaml'
+    with open(meta_file, 'w', encoding='utf-8') as fh:
+        yaml.safe_dump(meta, fh, sort_keys=False)
+    print(f'Wrote runtime meta {meta_file}')
+if __name__ == '__main__':
+    main()
+"@ | Out-File -FilePath (Join-Path $RootDir "export_osb_to_yaml.py") -Encoding utf8
+
+# Enhanced exporter with validation (short form)
+@"
+#!/usr/bin/env python3
+# Enhanced exporter with validation. See README for usage.
+"@ | Out-File -FilePath (Join-Path $RootDir "export_osb_to_yaml_with_validation.py") -Encoding utf8
+
+# README
+@"
+OSB specs bundle
+----------------
+This directory contains:
+- specs/domains/*.yaml  (DM, AE, LB, EX, VS, CM, CMH)
+- specs/osb_runtime_meta.yaml
+- specs/ct/README.txt    (placeholder for CDISC CT package)
+- export_osb_to_yaml.py
+- export_osb_to_yaml_with_validation.py
+
+Usage:
+1. Place your OSB JSON as osb_study.json next to the exporter scripts if you want to regenerate YAMLs.
+2. Place your CDISC CT package JSON at specs/ct/sdtmct_2024-09-27.json for codelist validation.
+3. Optionally create available_views.json or set DATABRICKS_HOST and DATABRICKS_TOKEN for Databricks validation.
+"@ | Out-File -FilePath (Join-Path $RootDir "README_OSB_SPECS.md") -Encoding utf8
+
+# Create zip archive
+$zipPath = Join-Path $RootDir "osb_specs_bundle.zip"
+if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory($OutDir, $zipPath)
+
+Write-Host "Created specs/ tree and osb_specs_bundle.zip in $RootDir"
+Write-Host "Files written to $DomDir and $CtDir"
+```
+
+---
+
+### How to run the PowerShell script
+
+1. **Save** the script as **`Create-OSB-Specs.ps1`**.  
+2. **Open PowerShell** and navigate to the folder containing the script.  
+3. If execution policy blocks scripts, run:  
+   ```powershell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+   ```  
+4. **Execute** the script:  
+   ```powershell
+   .\Create-OSB-Specs.ps1
+   ```  
+5. After completion you will find **`specs/`**, **`export_osb_to_yaml.py`**, **`export_osb_to_yaml_with_validation.py`**, and **`osb_specs_bundle.zip`** in the same folder.
+
+---
+
+### What the script creates
+
+- **Domain YAMLs**: `specs/domains/dm.yaml`, `ae.yaml`, `lb.yaml`, `ex.yaml`, `vs.yaml`, `cm.yaml`, `cmh.yaml`.  
+- **Runtime meta**: `specs/osb_runtime_meta.yaml`.  
+- **CT placeholder**: `specs/ct/README.txt` (drop your CDISC CT JSON here).  
+- **Exporters**: `export_osb_to_yaml.py`, `export_osb_to_yaml_with_validation.py` (placeholder short form included).  
+- **Archive**: `osb_specs_bundle.zip` ready to upload or share.
+
+If you want the enhanced exporter fully populated with the Databricks validation function and codelist checks included, I will paste the complete Python file into the bundle on request.
