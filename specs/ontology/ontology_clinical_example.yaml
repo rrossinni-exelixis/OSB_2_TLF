@@ -1,1 +1,129 @@
 
+# ontology_clinical_example.yaml
+ontology_version: "0.1"
+study:
+  id: XL092-123
+  title: "Example Oncology Study XL092"
+  owner: "Clinical Data Management"
+  last_updated: "2026-07-13"
+
+entities:
+  - id: Study
+    key_fields: ["STUDYID"]
+  - id: Subject
+    key_fields: ["USUBJID", "SUBJID"]
+    links:
+      - relation: enrolled_in
+        target: Study
+  - id: Visit
+    key_fields: ["VISITNUM", "VISIT"]
+    links:
+      - relation: belongs_to
+        target: Subject
+  - id: AE
+    key_fields: ["USUBJID", "AESEQ", "AETERM", "AESTDTC"]
+    links:
+      - relation: reported_for
+        target: Subject
+  - id: LabResult
+    key_fields: ["USUBJID", "LBTESTCD", "LBDTC", "LBORRES"]
+    links:
+      - relation: belongs_to
+        target: Subject
+  - id: Treatment
+    key_fields: ["USUBJID", "EXTRT", "EXSTDTC", "EXENDTC"]
+    links:
+      - relation: assigned_to
+        target: Subject
+
+canonical_metrics:
+  - id: MET_SAE_COUNT
+    name: "Subjects with Serious Adverse Event (SAE)"
+    description: "Count of unique subjects with at least one SAE (AESER = 'Y')."
+    owner: "Safety Team"
+    status: "approved"
+    last_updated: "2026-07-10"
+    canonical_sql: |
+      SELECT COUNT(DISTINCT USUBJID) AS SAE_SUBJECT_COUNT
+      FROM ae_prepped
+      WHERE AESER = 'Y'
+    inputs:
+      - source_view: ae_prepped
+      - required_fields: ["USUBJID", "AESER"]
+    provenance:
+      defined_in: "SAP Section 5.2"
+      osb_export_ref: "osb_export_2026-07-10"
+
+  - id: MET_BASELINE_ALT_MEAN
+    name: "Baseline Mean ALT"
+    description: "Mean ALT at baseline (pre-dose)."
+    owner: "Biomarkers Team"
+    status: "approved"
+    last_updated: "2026-07-11"
+    canonical_sql: |
+      SELECT AVG(CAST(LBORRES AS DOUBLE)) AS BASELINE_ALT_MEAN
+      FROM lb_prepped lb
+      JOIN dm_prepped dm ON lb.USUBJID = dm.USUBJID
+      WHERE lb.LBTESTCD = 'ALT' AND lb.LBDTC = dm.RFSTDTC
+    inputs:
+      - source_view: lb_prepped
+      - required_fields: ["USUBJID", "LBTESTCD", "LBORRES", "LBDTC"]
+    provenance:
+      defined_in: "Biomarker Plan v1.0"
+      osb_export_ref: "osb_export_2026-07-11"
+
+trusted_assets:
+  - id: TA_AE_CANONICAL
+    type: sql
+    title: "Canonical AE extraction"
+    owner: "Data Engineering"
+    status: "approved"
+    last_validated: "2026-07-10"
+    sql: |
+      SELECT
+        'XL092' AS STUDYID,
+        USUBJID,
+        ROW_NUMBER() OVER (PARTITION BY USUBJID ORDER BY AEDAT) AS AESEQ,
+        AETERM,
+        UPPER(TRIM(AETERM_PT)) AS AEDECOD,
+        CASE WHEN AESERIOU = 'YES' THEN 'Y' ELSE 'N' END AS AESER,
+        DATE_FORMAT(TO_DATE(AEDAT,'ddMMMyyyy'),'yyyy-MM-dd') AS AESTDTC
+      FROM ae_prepped
+    osb_variable_links:
+      domain: AE
+      variables:
+        - name: STUDYID
+          derivation: "'XL092'"
+        - name: USUBJID
+          derivation: "USUBJID"
+        - name: AESEQ
+          derivation: "[XL_SEQ:AE]"
+        - name: AETERM
+          derivation: "AETERM"
+        - name: AESER
+          derivation: "CASE WHEN AESERIOU = 'YES' THEN 'Y' ELSE 'N' END"
+        - name: AESTDTC
+          derivation: "DATE_FORMAT(TO_DATE(AEDAT,'ddMMMyyyy'),'yyyy-MM-dd')"
+
+governance:
+  owners:
+    - role: "Safety Team"
+      contact: "safety-team@example.com"
+    - role: "Data Engineering"
+      contact: "data-eng@example.com"
+    - role: "Biomarkers Team"
+      contact: "biomarkers@example.com"
+  conflict_resolution:
+    policy: |
+      If two owners provide conflicting canonical_sql for the same metric:
+        1) Mark both definitions as 'candidate'
+        2) Notify owners and schedule adjudication
+        3) Adjudicator sets the 'approved' definition
+  change_feed:
+    enabled: true
+    last_run: "2026-07-12"
+
+integration:
+  osb_export_id: "osb_export_2026-07-11"
+  recommended_deploy_path: "specs/ontology/ontology_clinical_example.yaml"
+  notes: "Pipeline should prefer canonical_sql from trusted_assets when computing metrics; fall back to variables[].derivation for SDTM column builds."
